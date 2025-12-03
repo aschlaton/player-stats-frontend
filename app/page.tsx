@@ -2,60 +2,70 @@
 
 import { useState } from 'react';
 import styles from './page.module.css';
-
-interface BoxScore {
-  player_id: string;
-  game_id: string;
-  team_id: string;
-  season: string;
-  player: string;
-  team: string;
-  match_up: string;
-  game_date: string;
-  w_l: string;
-  min: number | null;
-  pts: number | null;
-  fgm: number | null;
-  fga: number | null;
-  fg_percent: number | null;
-  three_pm: number | null;
-  three_pa: number | null;
-  three_p_percent: number | null;
-  ftm: number | null;
-  fta: number | null;
-  ft_percent: number | null;
-  oreb: number | null;
-  dreb: number | null;
-  reb: number | null;
-  ast: number | null;
-  stl: number | null;
-  blk: number | null;
-  tov: number | null;
-  pf: number | null;
-  plus_minus: number | null;
-  fp: number | null;
-}
-
-interface QueryResponse {
-  data: BoxScore[];
-  total: number;
-  limit: number;
-  offset: number;
-}
+import type { BoxScore, QueryParams, QueryResponse } from './types';
 
 export default function Home() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [backgroundLoading, setBackgroundLoading] = useState(false);
   const [allResults, setAllResults] = useState<QueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
+  const [serverPage, setServerPage] = useState(0);
   const pageSize = 10;
+
+  const fetchWithParams = async (params: QueryParams, isBackground = false) => {
+    if (isBackground) {
+      setBackgroundLoading(true);
+    } else {
+      setLoading(true);
+    }
+    setError(null);
+
+    try {
+      const queryString = new URLSearchParams(
+        Object.entries(params)
+          .filter(([_, value]) => value !== undefined && value !== null)
+          .map(([key, value]) => [key, String(value)])
+      ).toString();
+
+      const response = await fetch(`http://localhost:3000/api/boxscores?${queryString}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch results');
+      }
+
+      const data = await response.json();
+
+      // Append new data to existing results
+      setAllResults(prev => {
+        if (!prev) return data;
+        return {
+          ...data,
+          data: [...prev.data, ...data.data]
+        };
+      });
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error instanceof Error ? error.message : 'An error occurred');
+    } finally {
+      if (isBackground) {
+        setBackgroundLoading(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setCurrentPage(0);
 
     try {
       const response = await fetch('http://localhost:3000/api/query', {
@@ -72,6 +82,8 @@ export default function Home() {
 
       const data = await response.json();
       setAllResults(data);
+      setCurrentPage(0);
+      setServerPage(0);
     } catch (error) {
       console.error('Error:', error);
       setError(error instanceof Error ? error.message : 'An error occurred');
@@ -80,8 +92,40 @@ export default function Home() {
     }
   };
 
-  const handleNext = () => {
-    setCurrentPage(prev => prev + 1);
+  const shouldPrefetch = (pageNumber: number): boolean => {
+    if (!allResults || allResults.explicit_limit || backgroundLoading) return false;
+
+    const totalFetchedPages = Math.ceil(allResults.data.length / pageSize);
+    const isNearEnd = pageNumber >= totalFetchedPages - 2;
+    const hasMoreData = allResults.data.length < allResults.total;
+
+    return isNearEnd && hasMoreData;
+  };
+
+  const prefetch = async () => {
+    if (!allResults) return;
+
+    const newServerPage = serverPage + 1;
+    const newOffset = newServerPage * allResults.limit;
+
+    const params = {
+      ...allResults.query_params,
+      offset: newOffset,
+    };
+
+    await fetchWithParams(params, true);
+    setServerPage(newServerPage);
+  };
+
+  const handleNext = async () => {
+    if (!allResults) return;
+
+    const nextClientPage = currentPage + 1;
+    setCurrentPage(nextClientPage);
+
+    if (shouldPrefetch(nextClientPage)) {
+      await prefetch();
+    }
   };
 
   const handlePrev = () => {
@@ -93,30 +137,37 @@ export default function Home() {
     data: allResults.data.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
   } : null;
 
-  const totalPages = allResults ? Math.ceil(allResults.data.length / pageSize) : 0;
+  const totalPages = allResults
+    ? allResults.explicit_limit
+      ? Math.ceil(allResults.data.length / pageSize)
+      : Math.ceil(allResults.total / pageSize)
+    : 0;
 
   return (
     <div className={styles.container}>
       <div className={styles.content}>
         <form onSubmit={handleSubmit} className={styles.searchForm}>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask about NBA stats..."
-            className={styles.searchInput}
-            disabled={loading}
-          />
+          <div className={styles.searchWrapper}>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ask about NBA stats..."
+              className={styles.searchInput}
+              disabled={loading}
+            />
+            {(loading || backgroundLoading) && (
+              <div className={styles.loadingSpinner}></div>
+            )}
+          </div>
         </form>
 
         {error && <div className={styles.error}>{error}</div>}
 
-        {loading && <div className={styles.loading}>Loading...</div>}
-
         {paginatedData && (
           <div className={styles.results}>
             <div className={styles.resultsHeader}>
-              Showing {currentPage * pageSize + 1}-{Math.min((currentPage + 1) * pageSize, allResults?.data.length || 0)} of {allResults?.data.length} results
+              Showing {currentPage * pageSize + 1}-{Math.min((currentPage + 1) * pageSize, allResults?.data.length || 0)} of {allResults && !allResults.explicit_limit && allResults.total > allResults.limit ? allResults.total : allResults?.data.length || 0} result{(allResults && !allResults.explicit_limit && allResults.total > allResults.limit ? allResults.total : allResults?.data.length || 0) === 1 ? '' : 's'}
             </div>
 
             <div className={styles.tableWrapper}>
