@@ -160,3 +160,37 @@
   opacity: 0.3;
   cursor: not-allowed;
 }
+
+.pageNumber {
+  padding: 10px 20px;
+  background: #000;
+  color: #fff;
+  border: 1px solid #333;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.pageNumber:hover {
+  background: #0a0a0a;
+  border-color: #666;
+}
+
+.pageJumpForm {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #fff;
+  font-size: 14px;
+}
+
+.pageJumpInput {
+  width: 60px;
+  padding: 10px;
+  background: #000;
+  color: #fff;
+  border: 1px solid #666;
+  font-size: 14px;
+  text-align: center;
+  outline: none;
+}

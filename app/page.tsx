@@ -12,6 +12,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [serverPage, setServerPage] = useState(0);
+  const [jumpPageInput, setJumpPageInput] = useState<string | null>(null);
   const pageSize = 10;
 
   const fetchWithParams = async (params: QueryParams, isBackground = false) => {
@@ -131,10 +132,41 @@ export default function Home() {
     setCurrentPage(prev => Math.max(0, prev - 1));
   };
 
+  const handlePageJump = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (jumpPageInput) {
+      const pageNum = parseInt(jumpPageInput) - 1;
+      if (!isNaN(pageNum) && pageNum >= 0 && pageNum < totalPages) {
+        setCurrentPage(pageNum);
+      }
+    }
+    setJumpPageInput(null);
+  };
+
+  const COLUMN_ORDER = [
+    'player', 'team', 'match_up', 'game_date', 'season', 'w_l',
+    'min', 'pts', 'reb', 'ast', 'stl', 'blk', 'tov', 'pf',
+    'fgm', 'fga', 'fg_percent',
+    'three_pm', 'three_pa', 'three_p_percent',
+    'ftm', 'fta', 'ft_percent',
+    'oreb', 'dreb', 'plus_minus', 'fp',
+    'player_id', 'game_id', 'team_id'
+  ];
+
+  const getOrderedColumns = (data: any[]) => {
+    if (data.length === 0) return [];
+    const availableKeys = Object.keys(data[0]);
+    const ordered = COLUMN_ORDER.filter(col => availableKeys.includes(col));
+    const unknown = availableKeys.filter(key => !COLUMN_ORDER.includes(key));
+    return [...ordered, ...unknown];
+  };
+
   const paginatedData = allResults && allResults.data ? {
     ...allResults,
     data: allResults.data.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
   } : null;
+
+  const orderedColumns = paginatedData ? getOrderedColumns(paginatedData.data) : [];
 
   const totalPages = allResults && allResults.data
     ? allResults.explicit_limit
@@ -179,22 +211,21 @@ export default function Home() {
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    {paginatedData.data.length > 0 &&
-                      Object.keys(paginatedData.data[0]).map((key) => (
-                        <th key={key}>{key.replace(/_/g, ' ').toUpperCase()}</th>
-                      ))}
+                    {orderedColumns.map((key) => (
+                      <th key={key}>{key.replace(/_/g, ' ').toUpperCase()}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedData.data.map((row, idx) => (
                     <tr key={idx}>
-                      {Object.values(row).map((value, cellIdx) => (
-                        <td key={cellIdx}>
-                          {value === null || value === undefined
+                      {orderedColumns.map((key) => (
+                        <td key={key}>
+                          {row[key] === null || row[key] === undefined
                             ? '-'
-                            : typeof value === 'number' && !Number.isInteger(value)
-                            ? value.toFixed(1)
-                            : String(value)}
+                            : typeof row[key] === 'number' && !Number.isInteger(row[key])
+                            ? row[key].toFixed(1)
+                            : String(row[key])}
                         </td>
                       ))}
                     </tr>
@@ -209,14 +240,43 @@ export default function Home() {
                 disabled={currentPage === 0}
                 className={styles.paginationButton}
               >
-                Previous
+                ‹
               </button>
+              {jumpPageInput !== null ? (
+                <form onSubmit={handlePageJump} className={styles.pageJumpForm}>
+                  <input
+                    type="text"
+                    value={jumpPageInput}
+                    onChange={(e) => setJumpPageInput(e.target.value)}
+                    onBlur={(e) => {
+                      if (e.relatedTarget?.tagName !== 'BUTTON') {
+                        setJumpPageInput(null);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setJumpPageInput(null);
+                      }
+                    }}
+                    autoFocus
+                    className={styles.pageJumpInput}
+                  />
+                  <span> / {totalPages}</span>
+                </form>
+              ) : (
+                <button
+                  onClick={() => setJumpPageInput(String(currentPage + 1))}
+                  className={styles.pageNumber}
+                >
+                  {currentPage + 1} / {totalPages}
+                </button>
+              )}
               <button
                 onClick={handleNext}
                 disabled={currentPage >= totalPages - 1}
                 className={styles.paginationButton}
               >
-                Next
+                ›
               </button>
             </div>
           </div>
