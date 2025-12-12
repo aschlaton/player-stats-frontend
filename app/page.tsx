@@ -42,7 +42,6 @@ export default function Home() {
 
       const data = await response.json();
 
-      // Append new data to existing results
       setAllResults(prev => {
         if (!prev) return data;
         return {
@@ -68,7 +67,7 @@ export default function Home() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:3000/api/query', {
+      const response = await fetch('http://localhost:3000/api/sql', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -132,12 +131,12 @@ export default function Home() {
     setCurrentPage(prev => Math.max(0, prev - 1));
   };
 
-  const paginatedData = allResults ? {
+  const paginatedData = allResults && allResults.data ? {
     ...allResults,
     data: allResults.data.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
   } : null;
 
-  const totalPages = allResults
+  const totalPages = allResults && allResults.data
     ? allResults.explicit_limit
       ? Math.ceil(allResults.data.length / pageSize)
       : Math.ceil(allResults.total / pageSize)
@@ -152,7 +151,7 @@ export default function Home() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ask about NBA stats..."
+              placeholder="Show me Brooklyn Nets box scores..."
               className={styles.searchInput}
               disabled={loading}
             />
@@ -167,40 +166,37 @@ export default function Home() {
         {paginatedData && (
           <div className={styles.results}>
             <div className={styles.resultsHeader}>
-              Showing {currentPage * pageSize + 1}-{Math.min((currentPage + 1) * pageSize, allResults?.data.length || 0)} of {allResults && !allResults.explicit_limit && allResults.total > allResults.limit ? allResults.total : allResults?.data.length || 0} result{(allResults && !allResults.explicit_limit && allResults.total > allResults.limit ? allResults.total : allResults?.data.length || 0) === 1 ? '' : 's'}
+              {(() => {
+                const total = allResults && !allResults.explicit_limit && allResults.total > allResults.limit ? allResults.total : allResults?.data.length || 0;
+                if (total === 0) return 'No results found';
+                const start = currentPage * pageSize + 1;
+                const end = Math.min((currentPage + 1) * pageSize, allResults?.data.length || 0);
+                return `Showing ${start}-${end} of ${total} result${total === 1 ? '' : 's'}`;
+              })()}
             </div>
 
             <div className={styles.tableWrapper}>
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Player</th>
-                    <th>Team</th>
-                    <th>Matchup</th>
-                    <th>PTS</th>
-                    <th>REB</th>
-                    <th>AST</th>
-                    <th>STL</th>
-                    <th>BLK</th>
-                    <th>FG%</th>
-                    <th>3P%</th>
+                    {paginatedData.data.length > 0 &&
+                      Object.keys(paginatedData.data[0]).map((key) => (
+                        <th key={key}>{key.replace(/_/g, ' ').toUpperCase()}</th>
+                      ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedData.data.map((game) => (
-                    <tr key={`${game.player_id}-${game.game_id}`}>
-                      <td>{game.game_date}</td>
-                      <td>{game.player}</td>
-                      <td>{game.team}</td>
-                      <td>{game.match_up}</td>
-                      <td>{game.pts ?? '-'}</td>
-                      <td>{game.reb ?? '-'}</td>
-                      <td>{game.ast ?? '-'}</td>
-                      <td>{game.stl ?? '-'}</td>
-                      <td>{game.blk ?? '-'}</td>
-                      <td>{game.fg_percent?.toFixed(1) ?? '-'}</td>
-                      <td>{game.three_p_percent?.toFixed(1) ?? '-'}</td>
+                  {paginatedData.data.map((row, idx) => (
+                    <tr key={idx}>
+                      {Object.values(row).map((value, cellIdx) => (
+                        <td key={cellIdx}>
+                          {value === null || value === undefined
+                            ? '-'
+                            : typeof value === 'number' && !Number.isInteger(value)
+                            ? value.toFixed(1)
+                            : String(value)}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>

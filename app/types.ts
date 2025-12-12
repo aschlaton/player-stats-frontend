@@ -71,3 +71,9 @@ export interface QueryResponse {
   explicit_limit: boolean;
   query_params: QueryParams;
 }
+
+export interface SqlResponse {
+  sql: string;
+  rows: any[];
+  row_count: number;
+}

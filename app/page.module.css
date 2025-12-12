@@ -93,6 +93,12 @@
   overflow-x: auto;
   border: 1px solid #333;
   height: calc(100vh - 280px);
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.tableWrapper::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .table {
